@@ -1,0 +1,55 @@
+name: C/C++ CI
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs every day at midnight UTC
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        BUILD_TARGET: [release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone cmusfm repo
+        run: |
+          brew install automake
+          git clone https://github.com/arkq/cmusfm
+
+      - name: Build binary
+        run: |
+          cd cmusfm
+          autoreconf --install &&
+          mkdir build && 
+          cd build
+          ../configure &&
+          make
+
+      - name: Get current commit hash
+        id: get_commit
+        run: |
+          cd cmusfm
+          echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "COMMIT_MESSAGE=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.COMMIT_HASH }}
+          name: "Release based on ${{ env.COMMIT_HASH }}"
+          body: "${{ env.COMMIT_MESSAGE }}"
+          files: cmusfm/build/src/cmusfm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
